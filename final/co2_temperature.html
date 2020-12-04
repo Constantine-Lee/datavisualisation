@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+	<meta charset="utf-8">
+	<title>D3: Line chart, labeled</title>
+	<script type="text/javascript" src="../d3.js"></script>
+	<style type="text/css">
+		.line {
+			fill: none;
+			stroke: red;
+			stroke-width: 1.5;
+		}
+
+		.CO2Line {
+			fill: none;
+			stroke: blue;
+			stroke-width: 1.5;
+		}
+
+		.lowerLine {
+			fill: none;
+			stroke: grey;
+			stroke-width: 0.5;
+		}
+
+		.safeLevel {
+			stroke: red;
+			stroke-dasharray: 2, 3;
+		}
+
+		.danger {
+			stroke: red;
+		}
+
+		.dangerLabel {
+			font-family: Helvetica, sans-serif;
+			font-size: 12px;
+			fill: red;
+		}
+
+		.ui-slider-horizontal {
+			height: 8px;
+			width: 1000px;
+		}
+
+		.ui-slider .ui-slider-handle {
+			height: 15px;
+			width: 5px;
+			padding-left: 5px;
+		}
+
+		.ui-slider-range.ui-widget-header {
+			background: dimgray;
+		}
+	</style>
+	<!-- Bootstrap Core CSS -->
+	<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/4.1.3/css/bootstrap.min.css">
+	<!-- jQuery UI CSS -->
+	<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/jqueryui/1.12.1/jquery-ui.min.css">
+	<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/jqueryui/1.12.1/jquery-ui.structure.min.css">
+	<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/jqueryui/1.12.1/jquery-ui.theme.min.css">
+
+	<!-- Popper JS -->
+	<script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.16.0/umd/popper.min.js"></script>
+</head>
+
+<body>
+	<div id='tooltip'
+		style='position:absolute;background: #F2F2F2;	border: 1px solid #ccc;	box-shadow: 1px 1px 2px #fff inset,	-1px -1px 2px #fff inset; border-radius: 3px/6px;padding:5px;'>
+	</div>
+	<!-- Grey with black text -->
+	<nav class="navbar navbar-expand-sm bg-light navbar-light">
+		<ul class="navbar-nav">
+			<li class="nav-item ">
+				<a class="nav-link" href="homepage.html">Home</a>
+			</li>
+			<li class="nav-item">
+				<a class="nav-link" href="temperature_anomalies.html">Chart 1(Temperature Anomaly Over Time)</a>
+			</li>
+			<li class="nav-item active">
+				<a class="nav-link" href="#">Chart 2(CO2 emission vs Temperature Anomaly)</a>
+			</li>
+			<li class="nav-item">
+				<a class="nav-link" href="US_GDP_CO2.html">Chart 3(GDP vs CO2 emission of US)</a>
+			</li>
+		</ul>
+	</nav>
+	<div class="container pt-3">
+		<div class="pl-5">
+			<div class="container" style="position: relative;">
+				<div style="position: absolute; left: -20px; width: 25px; height: 25px; background: red"> </div>
+				Temperature Anomaly (°C)
+			</div>
+			<div class="container pt-2" style="position: relative;">
+				<div style="position: absolute; left: -20px; width: 25px; height: 25px; background: blue"> </div>CO2
+				Emission (ppm)
+			</div>
+		</div>
+		<div id="chart"></div>
+		<div style="position:absolute; left:190px; top:250px; writing-mode: vertical-rl;
+			transform:scale(-1);">Global Temperature Anomaly (°C)</div>
+		<div style="position:absolute; left:1250px; top:270px; writing-mode: vertical-rl;
+			transform:scale(-1);">CO2 emission (ppm)</div>
+		<div id="selections" class="row">
+			<div class="col-md-4">
+				<div style="padding-left: 20px;" id="slider-div">
+					<label>Date: <span id="dateLabel1">1959</span> - <span id="dateLabel2">2019</span></label>
+					<div class="" id="date-slider"></div>
+				</div>
+			</div>
+		</div>
+	</div>
+
+	<!-- External JS libraries -->
+	<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+	<script src="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/4.1.3/js/bootstrap.min.js"></script>
+	<script src="https://cdnjs.cloudflare.com/ajax/libs/jqueryui/1.12.1/jquery-ui.min.js"></script>
+
+	<script type="text/javascript">
+		//Function for converting CSV values from strings to Dates and numbers
+		var rowConverter = function (d) {
+			return {
+				date: new Date(+d.Year, 0),  //Make a new Date object for each year + month
+				Median: parseFloat(d.Median),  //Convert from string to float
+				CO2: parseFloat(d.CO2)
+			};
+		}
+
+		function load(loadData) {
+			//Load in data
+			d3.csv(loadData, rowConverter, function (data) {
+
+				var dataset = data;
+
+				//Print data to console as table, for verification
+				console.table(dataset, ["YEAR", "CO2", "Median"]);
+
+				//Create scale functions
+				xScale = d3.scaleTime()
+					.domain([
+						d3.min(dataset, function (d) { return d.date; }),
+						d3.max(dataset, function (d) { return d.date; })
+					])
+					.range([0, width]);
+
+				yScale = d3.scaleLinear()
+					.domain([
+						-0.80,
+						1.20
+					])
+					.range([height, 0]);
+
+				yScale2 = d3.scaleLinear()
+					.domain([
+						d3.min(dataset, function (d) { return d.CO2; }) - 10,
+						d3.max(dataset, function (d) { return d.CO2; }) + 10
+					])
+					.range([height, 0]);
+
+				//Define axes
+				xAxis = d3.axisBottom()
+					.scale(xScale)
+					.ticks(15)
+					.tickFormat(formatTime);
+
+				//Define Y axis
+				yAxis = d3.axisLeft()
+					.scale(yScale)
+					.ticks(10);
+
+				//Define Y axis
+				yAxis2 = d3.axisRight()
+					.scale(yScale2)
+					.ticks(10);
+
+				//Define line generators
+				line = d3.line()
+					.x(function (d) { return xScale(d.date); })
+					.y(function (d) { return yScale(d.Median); });
+
+				//Define line generators
+				upperLine = d3.line()
+					.x(function (d) { return xScale(d.date); })
+					.y(function (d) { return yScale2(d.CO2); });
+
+				const chart = d3.select('svg').append('g')
+					.attr('transform', 'translate(' + 40 + ',' + margin.top + ')');
+
+				const tooltip = d3.select('#tooltip');
+				const tooltipLine = chart.append('line');
+
+				chart.append("path")
+					.datum(dataset)
+					.attr("class", "line")
+					.attr("d", line)
+
+				// create a subselection for our "dots"
+				// and on enter append a bunch of circles
+				chart.selectAll(".tempdot")
+					.data(dataset)
+					.enter()
+					.append("circle")
+					.attr("class", "tempdot")
+					.attr("r", 2)
+					.attr("cx", function (d, i) {
+						return xScale(d.date);
+					})
+					.attr("cy", function (d) {
+						return yScale(d.Median);
+					})
+					.attr("fill", 'red');
+
+				chart.append("path")
+					.datum(dataset)
+					.attr("class", "CO2Line")
+					.attr("d", upperLine)
+
+				// create a subselection for our "dots"
+				// and on enter append a bunch of circles
+				chart.selectAll(".co2dot")
+					.data(dataset)
+					.enter()
+					.append("circle")
+					.attr("class", "co2dot")
+					.attr("r", 2)
+					.attr("cx", function (d, i) {
+						return xScale(d.date);
+					})
+					.attr("cy", function (d) {
+						return yScale2(d.CO2);
+					})
+					.attr("fill", 'blue');
+
+
+				//Create axes
+				chart.append("g")
+					.attr("class", "x axis")
+					.attr("transform", "translate(" + 0 + "," + (height) + ")")
+					.call(xAxis);
+
+				chart.append("g")
+					.attr("class", "y axis")
+					.call(yAxis);
+
+				chart.append("g")
+					.attr("class", "y axis2")
+					.attr("transform", "translate(" + width + ",0)")
+					.call(yAxis2);
+
+				// This allows to find the closest X index of the mouse:
+				var bisect = d3.bisector(function (d) { return d.date; }).left;
+
+				// Create a rect on top of the svg area: this rectangle recovers mouse position
+				chart
+					.append('rect')
+					.style("fill", "none")
+					.style("pointer-events", "all")
+					.attr('width', width + 10)
+					.attr('height', height)
+					.on('mouseover', mouseover)
+					.on('mousemove', mousemove)
+					.on('mouseout', mouseout);
+
+				// Add jQuery UI slider
+				$("#date-slider").slider({
+					range: true,
+					min: startDate,
+					max: endDate,
+					step: 10, // One day
+					values: [startDate, endDate],
+					slide: function (event, ui) {
+						chart.selectAll(".tempdot").remove();
+						chart.selectAll(".co2dot").remove();
+						$("#dateLabel1").text(new Date(ui.values[0]).getFullYear());
+						$("#dateLabel2").text(new Date(ui.values[1]).getFullYear());
+						var dataTimeFiltered = data.filter(function (d) {
+							return ((new Date(d.date).getFullYear() >= new Date(ui.values[0]).getFullYear()) && (new Date(d.date).getFullYear() <= new Date(ui.values[1]).getFullYear()))
+						});
+						console.log(dataTimeFiltered);
+
+						xScale.domain([
+							d3.min(dataTimeFiltered, function (d) { return d.date; }),  //startDate minus one day, for padding
+							d3.max(dataTimeFiltered, function (d) { return d.date; })	  //endDate plus one day, for padding
+						])
+
+						chart.select(".x.axis").transition().duration(100).call(xAxis);
+
+						// Update our line path
+						chart.select(".line")
+							.transition(100)
+							.attr("d", line(dataTimeFiltered));
+
+						d3.select(".line").transition().on("end", function () {
+							// create a subselection for our "dots"
+							// and on enter append a bunch of circles
+							chart.selectAll(".tempdot")
+								.data(dataTimeFiltered)
+								.enter()
+								.append("circle")
+								.attr("class", "tempdot")
+								.attr("r", 2)
+								.attr("cx", function (d, i) {
+									return xScale(d.date);
+								})
+								.attr("cy", function (d) {
+									return yScale(d.Median);
+								})
+								.attr("fill", 'red');
+						});
+
+						// Update our line path
+						chart.select(".CO2Line")
+							.transition(100)
+							.attr("d", upperLine(dataTimeFiltered));
+
+						d3.select(".CO2Line").transition().on("end", function () { 
+														// create a subselection for our "dots"
+							// and on enter append a bunch of circles
+							chart.selectAll(".co2dot")
+								.data(dataTimeFiltered)
+								.enter()
+								.append("circle")
+								.attr("class", "co2dot")
+								.attr("r", 2)
+								.attr("cx", function (d, i) {
+									return xScale(d.date);
+								})
+								.attr("cy", function (d) {
+									return yScale2(d.CO2);
+								})
+								.attr("fill", 'blue');
+						});
+
+					}
+				});
+
+				// What happens when the mouse move -> show the annotations at the right positions.
+				function mouseover() {
+					console.log("mouseover");
+				}
+
+				function mousemove() {
+					console.log("mousemove");
+					// recover coordinate we need					
+					var x0 = xScale.invert(d3.mouse(this)[0]);
+					var i = bisect(data, x0, 0);
+					i = Math.max(i - 1, 0)
+					selectedData = data[i];
+					if (!selectedData) {
+						selectedData = data[-1];
+					}
+					console.log(selectedData);
+
+					let datas = [];
+					datas.push({ name: 'Anomaly', color: 'red', data: selectedData.Median });
+					datas.push({ name: 'CO2', color: 'blue', data: selectedData.CO2 })
+					tooltipLine.attr('stroke', 'black')
+						.attr('x1', xScale(selectedData.date))
+						.attr('x2', xScale(selectedData.date))
+						.attr('y1', 0)
+						.attr('y2', height);
+
+					tooltip.html(selectedData.date.getFullYear())
+						.style('display', 'block')
+						.style('left', (d3.event.pageX + 20) + 'px')
+						.style('top', (d3.event.pageY - 20) + 'px')
+						.selectAll()
+						.data(datas)
+						.enter()
+						.append('div')
+						.html(d => {
+							return d.name + ': ' + d.data;
+						})
+						.style('color', d => d.color);
+				}
+				function mouseout() {
+					if (tooltip) tooltip.style('display', 'none');
+					if (tooltipLine) tooltipLine.attr('stroke', 'none');
+				}
+			});
+		}
+
+		var parseDate = d3.timeParse("%d/%m/%Y");
+		var startDate = new Date(parseDate("01/01/1959")).valueOf();
+		var endDate = new Date(parseDate("01/01/2019")).valueOf();
+
+		//Width and height
+		var margin = {
+			top: 20,
+			right: 20,
+			bottom: 20,
+			left: 20
+		},
+			width = 1000 - margin.left - margin.right,
+			height = 450 - margin.top - margin.bottom;
+
+		let currentSelection = "co2_temperature.csv";
+
+		var dataset, xScale, yScale, xAxis, yAxis, line;  //Empty, for now
+
+		//For converting Dates to strings
+		var formatTime = d3.timeFormat("%Y");
+
+		//Create SVG element
+		var svg = d3.select("#chart")
+			.append("svg")
+			.attr("width", width + margin.left + margin.right + 30)
+			.attr("height", height + margin.top + margin.bottom)
+			.append("g")
+			.attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+
+		load(currentSelection);
+	</script>
+</body>
+
+</html>
